@@ -1,15 +1,16 @@
-# fmtless: Formatted output convenience without the `fmt` bloat
+# fmtless: All the convenience of `fmt` without the bloat
 by Cathal Garvey, ©2016, Released under the GNU AGPLv3 or later
 
-## Why Avoid `fmt`?
+### Why Avoid `fmt`?
 The `fmt` library is a super-rich way to present and parse data
 in your Go application. I love `fmt`; everyone loves `fmt`!
 
 However, `fmt` is really big, adding a large premium to output
 binaries. For straight compilation to static binaries, this isn't
-usually a dealbreaker (*cf.* the success of Go overall). However,
-in edge-cases, like embedding Go in storage-constrained devices,
-or compiling many small apps in Go, or when
+usually a dealbreaker (*cf.* the success of Go overall).
+
+However, in edge-cases, like embedding Go in storage-constrained
+devices, or shipping a collection of small apps in Go, or when
 [transpiling to JS](https://github.com/gopherjs/gopherjs), the
 premium can be really costly. In my own experience, removing `fmt`
 from a GopherJS application removed 0.5Mb from the output Javascript,
@@ -29,7 +30,7 @@ my local install. In the future I plan to have a script pull chosen
 libraries directly from the most recent tag/release of Go and converts
 them.
 
-## Usage
+### Usage
 Right now, it's just replace `fmt` with `github.com/cathalgarvey/fmtless`.
 For stdlibs, likewise, it's just "prepend your stdlib imports with
 github.com/cathalgarvey/fmtless". Currently supported:
