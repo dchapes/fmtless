@@ -1,7 +1,8 @@
-package fmtless
+package fmt
 
 import (
 	"errors"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -123,13 +124,13 @@ func getSpec(window []byte) (string, bool) {
 		return "", false
 	}
 	var speclen int
-	if window[1] == '+' {
+	if window[1] == '+' || window[1] == '#' {
 		speclen = 3
 	} else {
 		speclen = 2
 	}
 	switch window[speclen-1] {
-	case 's', 'q', 'd', 'b', 'f', 'F', 'g', 'G', 'e', 'E', 'o', 'x', 'X':
+	case 'v', 's', 'q', 'd', 'b', 'f', 'F', 'g', 'G', 'e', 'E', 'o', 'x', 'X', 'U':
 		return string(window[:speclen]), true
 	default:
 		return "", false
@@ -138,8 +139,14 @@ func getSpec(window []byte) (string, bool) {
 
 func fmtI(spec string, i interface{}) string {
 	switch i.(type) {
+	case reflect.Type:
+		return fmtString(spec, i.(reflect.Type).String())
+	case error:
+		return fmtString(spec, i.(error).Error())
 	case string:
 		return fmtString(spec, i.(string))
+	case []byte:
+		return fmtBytes(spec, i.([]byte))
 	case rune:
 		return fmtUEscape(i.(rune))
 	case int, int64:
@@ -151,9 +158,33 @@ func fmtI(spec string, i interface{}) string {
 	}
 }
 
+func fmtBytes(spec string, i []byte) string {
+	switch spec {
+	case "%v", "%q", "%s":
+		return fmtString(spec, string(i))
+	case "%x", "%X":
+		{
+			var b16bytes []string
+			for _, b := range i {
+				bs := strconv.FormatInt(int64(b), 16)
+				if len(bs) == 1 {
+					bs = "0" + bs
+				}
+				b16bytes = append(b16bytes, bs)
+			}
+			if spec == "%X" {
+				return strings.ToUpper(strings.Join(b16bytes, ""))
+			}
+			return strings.Join(b16bytes, "")
+		}
+	default:
+		panic("Unsupported spec for []byte: " + spec)
+	}
+}
+
 func fmtString(spec, i string) string {
 	switch spec {
-	case "%s":
+	case "%s", "%v", "%#v":
 		return i
 	case "%q":
 		return strconv.Quote(i)
@@ -180,7 +211,7 @@ func fmtInt(spec string, i interface{}) string {
 		i64 = i.(int64)
 	}
 	switch spec {
-	case "%s", "%d":
+	case "%s", "%d", "%v":
 		base = 10
 	case "%o":
 		base = 8
@@ -218,7 +249,7 @@ func fmtFloat(spec string, i interface{}) string {
 	switch spec {
 	case "%b", "%f", "%F", "%g", "%G", "%e", "%E":
 		return strconv.FormatFloat(ifl, spec[1], -1, bs)
-	case "%s":
+	case "%s", "%v":
 		return strconv.FormatFloat(ifl, 'f', -1, bs)
 	default:
 		panic("Unsupported specifier for floats: " + spec)

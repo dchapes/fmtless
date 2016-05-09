@@ -5,11 +5,11 @@
 package xml
 
 import (
-	"errors"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/cathalgarvey/fmtless"
 )
 
 // typeInfo holds details for the xml representation of a type.
@@ -167,14 +167,15 @@ func structFieldInfo(typ reflect.Type, f *reflect.StructField) (*fieldInfo, erro
 			valid = false
 		}
 		if !valid {
-			return nil, errors.New("xml: invalid tag in field " + f.Name + " of type " + typ.String() + ": " + f.Tag.Get("xml"))
+			return nil, fmt.Errorf("xml: invalid tag in field %s of type %s: %q",
+				f.Name, typ, f.Tag.Get("xml"))
 		}
 	}
 
 	// Use of xmlns without a name is not allowed.
 	if finfo.xmlns != "" && tag == "" {
-		e := errors.New("xml: namespace without name in field " + f.Name + " of type " + typ.String() + ": " + f.Tag.Get("xml"))
-		return nil, e
+		return nil, fmt.Errorf("xml: namespace without name in field %s of type %s: %q",
+			f.Name, typ, f.Tag.Get("xml"))
 	}
 
 	if f.Name == "XMLName" {
@@ -203,13 +204,12 @@ func structFieldInfo(typ reflect.Type, f *reflect.StructField) (*fieldInfo, erro
 		parents[0] = f.Name
 	}
 	if parents[len(parents)-1] == "" {
-		e := errors.New("xml: trailing '>' in field " + f.Name + " of type " + typ.String())
-		return nil, e
+		return nil, fmt.Errorf("xml: trailing '>' in field %s of type %s", f.Name, typ)
 	}
 	finfo.name = parents[len(parents)-1]
 	if len(parents) > 1 {
 		if (finfo.flags & fElement) == 0 {
-			return nil, errors.New("xml: " + tag + " chain not valid with " + strings.Join(tokens[1:], ",") + " flag")
+			return nil, fmt.Errorf("xml: %s chain not valid with %s flag", tag, strings.Join(tokens[1:], ","))
 		}
 		finfo.parents = parents[:len(parents)-1]
 	}
@@ -221,7 +221,8 @@ func structFieldInfo(typ reflect.Type, f *reflect.StructField) (*fieldInfo, erro
 		ftyp := f.Type
 		xmlname := lookupXMLName(ftyp)
 		if xmlname != nil && xmlname.name != finfo.name {
-			return nil, errors.New("xml: name " + strconv.Quote(finfo.name) + " in tag of " + typ.String() + "." + f.Name + " conflicts with name " + xmlname.name + " in " + ftyp.String() + ".XMLName")
+			return nil, fmt.Errorf("xml: name %q in tag of %s.%s conflicts with name %q in %s.XMLName",
+				finfo.name, typ, f.Name, xmlname.name, ftyp)
 		}
 	}
 	return finfo, nil
@@ -343,7 +344,7 @@ type TagPathError struct {
 }
 
 func (e *TagPathError) Error() string {
-	return e.Struct.String() + " field " + strconv.Quote(e.Field1) + " with tag " + strconv.Quote(e.Tag1) + " conflicts with field " + strconv.Quote(e.Field2) + " with tag " + strconv.Quote(e.Tag2)
+	return fmt.Sprintf("%s field %q with tag %q conflicts with field %q with tag %q", e.Struct, e.Field1, e.Tag1, e.Field2, e.Tag2)
 }
 
 // value returns v's field value corresponding to finfo.

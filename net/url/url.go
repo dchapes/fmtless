@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/cathalgarvey/fmtless"
 )
 
 // Error reports an error and the operation and URL that caused it.
@@ -540,7 +542,7 @@ func parseHost(host string) (string, error) {
 		}
 		colonPort := host[i+1:]
 		if !validOptionalPort(colonPort) {
-			return "", errors.New("invalid port " + colonPort + " after host")
+			return "", fmt.Errorf("invalid port %q after host", colonPort)
 		}
 
 		// RFC 6874 defines that %25 (%-encoded percent) introduces

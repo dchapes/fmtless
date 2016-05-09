@@ -18,6 +18,8 @@ import (
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/cathalgarvey/fmtless"
 )
 
 // Unmarshal parses the JSON-encoded data and stores the result
@@ -677,7 +679,7 @@ func (d *decodeState) object(v reflect.Value) {
 			case string:
 				d.literalStore([]byte(qv), subv, true)
 			default:
-				d.saveError(errors.New("json: invalid use of ,string struct tag, trying to unmarshal unquoted value into " + subv.Type().String()))
+				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal unquoted value into %v", subv.Type()))
 			}
 		} else {
 			d.value(subv)
@@ -740,7 +742,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	// Check for unmarshaler.
 	if len(item) == 0 {
 		//Empty string given
-		d.saveError(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+		d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 		return
 	}
 	wantptr := item[0] == 'n' // null
@@ -755,7 +757,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	if ut != nil {
 		if item[0] != '"' {
 			if fromQuoted {
-				d.saveError(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.saveError(&UnmarshalTypeError{"string", v.Type(), int64(d.off)})
 			}
@@ -764,7 +766,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		s, ok := unquoteBytes(item)
 		if !ok {
 			if fromQuoted {
-				d.error(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+				d.error(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.error(errPhase)
 			}
@@ -790,7 +792,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		switch v.Kind() {
 		default:
 			if fromQuoted {
-				d.saveError(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+				d.saveError(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.saveError(&UnmarshalTypeError{"bool", v.Type(), int64(d.off)})
 			}
@@ -808,7 +810,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		s, ok := unquoteBytes(item)
 		if !ok {
 			if fromQuoted {
-				d.error(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+				d.error(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.error(errPhase)
 			}
@@ -841,7 +843,7 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 	default: // number
 		if c != '-' && (c < '0' || c > '9') {
 			if fromQuoted {
-				d.error(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+				d.error(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.error(errPhase)
 			}
@@ -852,12 +854,12 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 			if v.Kind() == reflect.String && v.Type() == numberType {
 				v.SetString(s)
 				if !isValidNumber(s) {
-					d.error(errors.New("json: invalid number literal, trying to unmarshal " + strconv.Quote(string(item)) + " into Number"))
+					d.error(fmt.Errorf("json: invalid number literal, trying to unmarshal %q into Number", item))
 				}
 				break
 			}
 			if fromQuoted {
-				d.error(errors.New("json: invalid use of ,string struct tag, trying to unmarshal " + strconv.Quote(string(item)) + " into " + v.Type().String()))
+				d.error(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.error(&UnmarshalTypeError{"number", v.Type(), int64(d.off)})
 			}

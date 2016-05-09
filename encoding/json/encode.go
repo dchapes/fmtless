@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"encoding"
 	"encoding/base64"
-	"errors"
 	"math"
 	"reflect"
 	"runtime"
@@ -24,6 +23,8 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/cathalgarvey/fmtless"
 )
 
 // Marshal returns the JSON encoding of v.
@@ -536,7 +537,7 @@ func stringEncoder(e *encodeState, v reflect.Value, quoted bool) {
 			numStr = "0" // Number's zero-val
 		}
 		if !isValidNumber(numStr) {
-			e.error(errors.New("json: invalid number literal " + strconv.Quote(numStr)))
+			e.error(fmt.Errorf("json: invalid number literal %q", numStr))
 		}
 		e.WriteString(numStr)
 		return

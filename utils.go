@@ -1,4 +1,4 @@
-package fmtless
+package fmt
 
 import "strings"
 

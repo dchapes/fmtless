@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/cathalgarvey/fmtless"
 )
 
 // BUG(rsc): Mapping between XML elements and data structures is inherently flawed:
@@ -192,7 +194,7 @@ func (p *Decoder) unmarshalInterface(val Unmarshaler, start *StartElement) error
 	}
 
 	if !p.popEOF() {
-		return errors.New("xml: " + receiverType(val) + ".UnmarshalXML did not consume entire <" + start.Name.Local + "> element")
+		return fmt.Errorf("xml: %s.UnmarshalXML did not consume entire <%s> element", receiverType(val), start.Name.Local)
 	}
 
 	return nil

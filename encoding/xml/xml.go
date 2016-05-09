@@ -581,18 +581,18 @@ func (d *Decoder) rawToken() (Token, error) {
 			content := string(data)
 			ver := procInst("version", content)
 			if ver != "" && ver != "1.0" {
-				d.err = errors.New("xml: unsupported version " + strconv.Quote(ver) + "; only version 1.0 is supported")
+				d.err = fmt.Errorf("xml: unsupported version %q; only version 1.0 is supported", ver)
 				return nil, d.err
 			}
 			enc := procInst("encoding", content)
 			if enc != "" && enc != "utf-8" && enc != "UTF-8" && !strings.EqualFold(enc, "utf-8") {
 				if d.CharsetReader == nil {
-					d.err = errors.New("xml: encoding " + strconv.Quote(enc) + " declared but Decoder.CharsetReader is nil")
+					d.err = fmt.Errorf("xml: encoding %q declared but Decoder.CharsetReader is nil", enc)
 					return nil, d.err
 				}
 				newr, err := d.CharsetReader(enc, d.r.(io.Reader))
 				if err != nil {
-					d.err = errors.New("xml: opening charset " + strconv.Quote(enc) + ": " + err.Error())
+					d.err = fmt.Errorf("xml: opening charset %q: %v", enc, err)
 					return nil, d.err
 				}
 				if newr == nil {
@@ -1091,12 +1091,7 @@ Input:
 		}
 		buf = buf[size:]
 		if !isInCharacterRange(r) {
-			// CG: am aware that casting to string is probably not the
-			// same as the %U fmt specifier.
-			// %U fmt specifier is "U+<hex>", such as "U+0012" for \x12.
-			rcode := strings.ToUpper(strconv.FormatInt(int64(r), 16))
-			rcode = "U+" + fmtless.SRepeat("0", 4-len(rcode)) + rcode
-			d.err = d.syntaxError("illegal character code " + rcode)
+			d.err = d.syntaxError(fmt.Sprintf("illegal character code %U", r))
 			return nil
 		}
 	}
