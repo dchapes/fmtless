@@ -5,89 +5,134 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestGetSpec(t *testing.T) {
-	s, o := getSpec([]byte("%d"))
-	assert.True(t, o)
-	assert.Equal(t, s, "%d")
-
-	s, o = getSpec([]byte("%df"))
-	assert.True(t, o)
-	assert.Equal(t, s, "%d")
-
-	s, o = getSpec([]byte("%f"))
-	assert.True(t, o)
-	assert.Equal(t, s, "%f")
-
-	s, o = getSpec([]byte("%n"))
-	assert.False(t, o)
-	assert.Equal(t, s, "")
-
-	s, o = getSpec([]byte("ff"))
-	assert.False(t, o)
-	assert.Equal(t, s, "")
-
-	s, o = getSpec([]byte("%+f"))
-	assert.True(t, o)
-	assert.Equal(t, s, "%+f")
+	cases := [...]struct {
+		spec string
+		s    string
+		ok   bool
+	}{
+		{"%d", "%d", true},
+		{"%df", "%d", true},
+		{"%f", "%f", true},
+		{"%n", "", false},
+		{"ff", "", false},
+		{"%+f", "%+f", true},
+	}
+	for _, tc := range cases {
+		s, ok := getSpec([]byte(tc.spec))
+		if ok != tc.ok || s != tc.s {
+			t.Errorf("getSpec(%q) gave (%q,%t); want (%q,%t)",
+				tc.spec, s, ok, tc.s, tc.ok,
+			)
+		}
+	}
 }
 
 func TestSplitSpecs(t *testing.T) {
-	// splitFmtSpecs(fmts string) []sprintMatch {
-	specs := splitFmtSpecs("This %s that %d these %f those %g")
-	expected := []sprintMatch{
-		sprintMatch{"This ", "%s"},
-		sprintMatch{" that ", "%d"},
-		sprintMatch{" these ", "%f"},
-		sprintMatch{" those ", "%g"},
+	cases := [...]struct {
+		spec string
+		want []sprintMatch
+	}{
+		{
+			"This %s that %d these %f those %g",
+			[]sprintMatch{
+				{"This ", "%s"},
+				{" that ", "%d"},
+				{" these ", "%f"},
+				{" those ", "%g"},
+			},
+		},
 	}
-	assert.EqualValues(t, expected, specs)
+	for _, tc := range cases {
+		specs := splitFmtSpecs(tc.spec)
+		if !reflect.DeepEqual(specs, tc.want) {
+			t.Errorf("splitFmtSpecs(%q)\n\tgave: %q\n\twant: %q",
+				tc.spec, specs, tc.want,
+			)
+		}
+	}
 }
 
 func TestSprintf(t *testing.T) {
-	filled := Sprintf("This: '%s' is stringier than: %q ", "\"string\"", "\"string\"")
-	assert.Equal(t, `This: '"string"' is stringier than: "\"string\"" `, filled)
+	cases := [...]struct {
+		format string
+		args   []interface{}
+		want   string
+	}{
+		{
+			format: "This: '%s' is stringier than: %q ",
+			args:   []interface{}{`"string"`, `"string"`},
+		}, {
+			format: "This: '%s' is stringier than: %q",
+			args:   []interface{}{`"string"`, `"string"`},
+		}, {
+			format: "There are %d ways to kill someone who rounds pi to %f",
+			args:   []interface{}{3, 3.1},
+			want:   "There are 3 ways to kill someone who rounds pi to 3.1",
+		}, {
+			format: "%U + %U != %U",
+			args:   []interface{}{'a', 'í', '쎭'},
+		}, {
+			format: "%v == %s",
+			args:   []interface{}{Errorf("error %v", 1), fmt.Errorf("error %d", 2)},
+		}, {
+			format: "%X",
+			args:   []interface{}{[]byte{1, 2, 3, 4}},
+		}, {
+			format: "%X",
+			args:   []interface{}{[]byte{1, 2, 4, 8, 16, 32, 64, 128, 255}},
+		}, {
+			format: "%x",
+			args:   []interface{}{[]byte{1, 2, 4, 8, 16, 32, 64, 128, 255}},
+		}, {
+			// Similar to a problematic error in json decode.go
+			format: "failed to unmarshal %q into %v",
+			args:   []interface{}{"1", reflect.ValueOf("").Type()},
+		},
+	}
+	for _, tc := range cases {
+		got := Sprintf(tc.format, tc.args...)
+		errgot := Errorf(tc.format, tc.args...)
+		want := tc.want
+		var errwant error
+		if want == "" {
+			want = fmt.Sprintf(tc.format, tc.args...)
+			errwant = fmt.Errorf(tc.format, tc.args...)
+		} else {
+			errwant = errors.New(want)
+		}
+		if got != want {
+			t.Errorf("Sprintf(%q, %v)\n\tgave %#q\n\twant %#q",
+				tc.format, tc.args, got, want,
+			)
+		}
+		if !reflect.DeepEqual(errgot, errwant) {
+			t.Errorf("Errorf(%q, %v)\n\tgave %#q\n\twant %#q",
+				tc.format, tc.args, errgot, errwant,
+			)
+		}
 
-	filled = Sprintf("This: '%s' is stringier than: %q", "\"string\"", "\"string\"")
-	assert.Equal(t, `This: '"string"' is stringier than: "\"string\""`, filled)
-
-	filled = Sprintf("There are %d ways to kill someone who rounds pi to %f", 3, 3.1)
-	assert.Equal(t, "There are 3 ways to kill someone who rounds pi to 3.1", filled)
-
-	filled = Sprintf("%U + %U != %U", []rune("a")[0], []rune("í")[0], []rune("쎭")[0])
-	assert.Equal(t, "U+0061 + U+00ED != U+C3AD", filled)
-
-	filled = Sprintf("%v == %s", Errorf("error %v", 1), fmt.Errorf("error %d", 2))
-	assert.Equal(t, "error 1 == error 2", filled)
-
-	filled = Sprintf("%X", []byte{1, 2, 3, 4})
-	assert.Equal(t, fmt.Sprintf("%X", []byte{1, 2, 3, 4}), filled)
-
-	filled = Sprintf("%X", []byte{1, 2, 4, 8, 16, 32, 64, 128, 255})
-	assert.Equal(t, fmt.Sprintf("%X", []byte{1, 2, 4, 8, 16, 32, 64, 128, 255}), filled)
-
-	filled = Sprintf("%x", []byte{1, 2, 4, 8, 16, 32, 64, 128, 255})
-	assert.Equal(t, fmt.Sprintf("%x", []byte{1, 2, 4, 8, 16, 32, 64, 128, 255}), filled)
-
-	// Similar to a problematic error in json decode.go
-	errfilled := Errorf("failed to unmarshal %q into %v", "1", reflect.ValueOf("").Type())
-	assert.Equal(t, errors.New("failed to unmarshal \"1\" into string"), errfilled)
+	}
 }
 
 func TestSprintCodepoint(t *testing.T) {
-	// fmtUEscape(i.(rune))
-	uesc := fmtUEscape('\x12')
-	assert.Equal(t, "U+0012", uesc)
-
-	uesc = fmtUEscape(18)
-	assert.Equal(t, "U+0012", uesc)
-
-	uesc = fmtUEscape([]rune("í")[0])
-	assert.Equal(t, "U+00ED", uesc)
-
-	uesc = fmtUEscape([]rune("쎭")[0])
-	assert.Equal(t, "U+C3AD", uesc)
+	cases := [...]struct {
+		r rune
+		s string
+	}{
+		{'\x12', "U+0012"},
+		{18, "U+0012"},
+		{'í', "U+00ED"},
+		{'쎭', "U+C3AD"},
+	}
+	for _, tc := range cases {
+		s := fmtUEscape(tc.r)
+		if s != tc.s {
+			t.Errorf("fmtUEscape(%q) gave %q, want %q",
+				tc.r, s, tc.s,
+			)
+		}
+	}
 }
