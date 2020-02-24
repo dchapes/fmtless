@@ -3,10 +3,7 @@ package fmt
 import "strings"
 
 // SRepeat just repeats a character or string times <repeat>.
+// DEPRICATED, just use strings.Repeat.
 func SRepeat(char string, repeat int) string {
-	out := []string{}
-	for i := 0; i < repeat; i++ {
-		out = append(out, char)
-	}
-	return strings.Join(out, "")
+	return strings.Repeat(char, repeat)
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -127,9 +128,11 @@ func TestSprintCodepoint(t *testing.T) {
 		{'í', "U+00ED"},
 		{'쎭', "U+C3AD"},
 	}
+	var sb strings.Builder
 	for _, tc := range cases {
-		s := fmtUEscape(tc.r)
-		if s != tc.s {
+		sb.Reset()
+		fmtUEscape(&sb, tc.r)
+		if s := sb.String(); s != tc.s {
 			t.Errorf("fmtUEscape(%q) gave %q, want %q",
 				tc.r, s, tc.s,
 			)

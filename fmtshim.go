@@ -7,7 +7,16 @@ import (
 	"strings"
 )
 
-// Errorf returnsan error object for the given format and values.
+// Stringer is implemented by any value that has a String method,
+// which defines the ``native'' format for that value.
+// The String method is used to print values passed as an operand
+// to any format that accepts a string or to an unformatted printer
+// such as Print.
+type Stringer interface {
+	String() string
+}
+
+// Errorf returns an error object for the given format and values.
 func Errorf(format string, a ...interface{}) error {
 	return errors.New(Sprintf(format, a...))
 }
@@ -16,7 +25,7 @@ func Errorf(format string, a ...interface{}) error {
 func Printf(format string, a ...interface{}) (n int, err error) {
 	out := Sprintf(format, a...)
 	print(out)
-	return len([]byte(out)), nil
+	return len(out), nil
 }
 
 // Println formats using the default formats for its
@@ -25,9 +34,9 @@ func Printf(format string, a ...interface{}) (n int, err error) {
 // It returns the number of bytes written and any write
 // error encountered.
 func Println(a ...interface{}) (n int, err error) {
-	out := Sprint(a...)
+	out := Sprintln(a...)
 	println(out)
-	return len([]byte(out)), nil
+	return len(out), nil
 }
 
 // Print formats using the default formats for its
@@ -38,23 +47,33 @@ func Println(a ...interface{}) (n int, err error) {
 func Print(a ...interface{}) (n int, err error) {
 	out := Sprint(a...)
 	print(out)
-	return len([]byte(out)), nil
+	return len(out), nil
 }
 
 // Sprint renders arguments in their default format
 // ("%s"/"%d"/"%f"/"%U" for string/int/float/rune, respectively)
 func Sprint(a ...interface{}) string {
-	var out []string
-	for _, i := range a {
-		out = append(out, fmtI("%s", i))
+	return sprint(false, a...)
+}
+func sprint(ln bool, a ...interface{}) string {
+	var sb strings.Builder
+	sb.Grow(len(a) * 2) // XXX
+	for i, v := range a {
+		if ln && i != 0 {
+			sb.WriteByte(' ')
+		}
+		fmtI(&sb, "%s", v)
 	}
-	return strings.Join(out, " ")
+	if ln {
+		sb.WriteByte('\n')
+	}
+	return sb.String()
 }
 
 // Sprintf is a fmtless alternative to fmt.Sprintf that supports some of
 // the most common subset of fmt usage.
 func Sprintf(fmts string, args ...interface{}) string {
-	var bits []string
+	var sb strings.Builder
 	fmlist := splitFmtSpecs(fmts)
 	for idx, sm := range fmlist {
 		var i interface{}
@@ -62,14 +81,14 @@ func Sprintf(fmts string, args ...interface{}) string {
 		if idx < len(args) {
 			i = args[idx]
 		}
-		bits = append(bits, sm.render(i))
+		sm.render(&sb, i)
 	}
-	return strings.Join(bits, "")
+	return sb.String()
 }
 
 // Sprintln is just like Sprint but with a trailing newline.
 func Sprintln(a ...interface{}) string {
-	return Sprint(a...) + "\n"
+	return sprint(true, a...)
 }
 
 type sprintMatch struct {
@@ -77,11 +96,11 @@ type sprintMatch struct {
 	spec   string
 }
 
-func (spm sprintMatch) render(i ...interface{}) string {
-	if spm.spec == "" {
-		return spm.before
+func (spm sprintMatch) render(sb *strings.Builder, a interface{}) {
+	sb.WriteString(spm.before)
+	if spm.spec != "" {
+		fmtI(sb, spm.spec, a)
 	}
-	return spm.before + fmtI(spm.spec, i[0])
 }
 
 func splitFmtSpecs(fmts string) []sprintMatch {
@@ -137,78 +156,95 @@ func getSpec(window []byte) (string, bool) {
 	}
 }
 
-func fmtI(spec string, i interface{}) string {
-	switch i.(type) {
+func fmtI(sb *strings.Builder, spec string, i interface{}) {
+	switch i := i.(type) {
+	case Stringer:
+		fmtString(sb, spec, i.String())
 	case reflect.Type:
-		return fmtString(spec, i.(reflect.Type).String())
+		fmtString(sb, spec, i.String())
 	case error:
-		return fmtString(spec, i.(error).Error())
+		fmtString(sb, spec, i.Error())
 	case string:
-		return fmtString(spec, i.(string))
+		fmtString(sb, spec, i)
 	case []byte:
-		return fmtBytes(spec, i.([]byte))
+		fmtBytes(sb, spec, i)
 	case rune:
-		return fmtUEscape(i.(rune))
+		fmtUEscape(sb, i)
 	case int, int64:
-		return fmtInt(spec, i)
+		fmtInt(sb, spec, i)
 	case float32, float64:
-		return fmtFloat(spec, i)
+		fmtFloat(sb, spec, i)
 	default:
 		panic("Unsupported interface for fmtless.Sprintf")
 	}
 }
 
-func fmtBytes(spec string, i []byte) string {
+func fmtBytes(sb *strings.Builder, spec string, b []byte) {
 	switch spec {
-	case "%v", "%q", "%s":
-		return fmtString(spec, string(i))
+	case "%v", "%s":
+		sb.Write(b)
+	case "%q":
+		fmtString(sb, spec, string(b))
 	case "%x", "%X":
 		{
-			var b16bytes []string
-			for _, b := range i {
-				bs := strconv.FormatInt(int64(b), 16)
-				if len(bs) == 1 {
-					bs = "0" + bs
+			tmp := make([]byte, 0, 2)
+			for _, c := range b {
+				tmp = strconv.AppendInt(tmp[:0], int64(c), 16)
+				if len(tmp) == 1 {
+					sb.WriteByte('0')
 				}
-				b16bytes = append(b16bytes, bs)
+				if spec == "%X" {
+					for i, r := range tmp {
+						if 'a' <= r && r <= 'z' {
+							tmp[i] -= 'a' - 'A'
+						}
+					}
+				}
+				sb.Write(tmp)
 			}
-			if spec == "%X" {
-				return strings.ToUpper(strings.Join(b16bytes, ""))
-			}
-			return strings.Join(b16bytes, "")
 		}
 	default:
 		panic("Unsupported spec for []byte: " + spec)
 	}
 }
 
-func fmtString(spec, i string) string {
+func fmtString(sb *strings.Builder, spec, s string) {
 	switch spec {
 	case "%s", "%v", "%#v":
-		return i
+		sb.WriteString(s)
 	case "%q":
-		return strconv.Quote(i)
+		sb.WriteString(strconv.Quote(s))
 	default:
 		panic("Unsupported spec for string: " + spec)
 	}
 }
 
-func fmtUEscape(r rune) string {
-	rcode := strings.ToUpper(strconv.FormatInt(int64(r), 16))
-	rcode = "U+" + SRepeat("0", 4-len(rcode)) + rcode
-	return rcode
+func fmtUEscape(sb *strings.Builder, r rune) {
+	tmp := make([]byte, 0, 8)
+	tmp = strconv.AppendInt(tmp, int64(r), 16)
+	for i, r := range tmp {
+		if 'a' <= r && r <= 'z' {
+			tmp[i] -= 'a' - 'A'
+		}
+	}
+	sb.Grow(6)
+	sb.WriteString("U+")
+	if len(tmp) < 4 {
+		sb.WriteString("0000"[:4-len(tmp)])
+	}
+	sb.Write(tmp)
 }
 
-func fmtInt(spec string, i interface{}) string {
+func fmtInt(sb *strings.Builder, spec string, i interface{}) {
 	var i64 int64
 	var base int
-	switch i.(type) {
+	switch i := i.(type) {
 	case int:
-		i64 = int64(i.(int))
+		i64 = int64(i)
 	case int32:
-		i64 = int64(i.(int32))
+		i64 = int64(i)
 	case int64:
-		i64 = i.(int64)
+		i64 = i
 	}
 	switch spec {
 	case "%s", "%d", "%v":
@@ -220,38 +256,39 @@ func fmtInt(spec string, i interface{}) string {
 	case "%X", "%x":
 		base = 16
 	}
-	out := strconv.FormatInt(i64, base)
+	tmp := make([]byte, 0, 64)
+	tmp = strconv.AppendInt(tmp, i64, base)
 	if spec == "%X" {
-		out = strings.ToUpper(out)
+		for i, r := range tmp {
+			if 'a' <= r && r <= 'z' {
+				tmp[i] -= 'a' - 'A'
+			}
+		}
 	}
-	return out
+	sb.Write(tmp)
 }
 
-func fmtFloat(spec string, i interface{}) string {
-	var (
-		bs  int
-		ifl float64
-	)
-	switch i.(type) {
+func fmtFloat(sb *strings.Builder, spec string, f interface{}) {
+	var bitSize int
+	var f64 float64
+	switch f := f.(type) {
 	case float32:
-		{
-			ifl = float64(i.(float32))
-			bs = 32
-		}
+		f64 = float64(f)
+		bitSize = 32
 	case float64:
-		{
-			ifl = i.(float64)
-			bs = 64
-		}
+		f64 = f
+		bitSize = 64
 	default:
-		panic("Unpossible")
+		panic("unreachable")
 	}
+	tmp := make([]byte, 0, 32)
 	switch spec {
 	case "%b", "%f", "%F", "%g", "%G", "%e", "%E":
-		return strconv.FormatFloat(ifl, spec[1], -1, bs)
+		tmp = strconv.AppendFloat(tmp, f64, spec[1], -1, bitSize)
 	case "%s", "%v":
-		return strconv.FormatFloat(ifl, 'f', -1, bs)
+		tmp = strconv.AppendFloat(tmp, f64, 'f', -1, bitSize)
 	default:
 		panic("Unsupported specifier for floats: " + spec)
 	}
+	sb.Write(tmp)
 }
